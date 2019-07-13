@@ -11,6 +11,8 @@
 // 2017/06/04 BGMとBGSの再生コマンドを連打するとノイズが発生する不具合と、オプション音量を変更した瞬間音量調節が無効になるバグを修正しました
 // 2017/10/05 FootstepSound.jsとの連携
 // 2018/06/27 panが0と0以外の値をまたぐ時、ノイズが入る（環境がある）バグを対策
+// 2018/07/31 ロード直後、一瞬だけ音源処理が反映されないバグを修正しました
+// 2018/09/16 2018/06/27が無意味だったので打ち消し。ノイズが入ったら本体バージョンを1.6.1以上に上げましょう
 //=============================================================================
 
 /*:
@@ -203,6 +205,33 @@
 		configurable: true
 	});
 
+	var bgmOnSave = null;
+	var bgsOnSave = null;
+
+	var _Scene_Map_onMapLoaded = Scene_Map.prototype.onMapLoaded;
+	Scene_Map.prototype.onMapLoaded = function() {
+		_Scene_Map_onMapLoaded.apply(this, arguments);
+		if (bgmOnSave) {
+			AudioManager.playBgm(bgmOnSave);
+			bgmOnSave = null;
+		}
+		if (bgsOnSave) {
+			AudioManager.playBgs(bgsOnSave);
+			bgsOnSave = null;
+		}
+		AudioManager.updateAudioSource();
+	};
+
+	var _Game_System_onAfterLoad = Game_System.prototype.onAfterLoad;
+	Game_System.prototype.onAfterLoad = function() {
+		bgmOnSave = this._bgmOnSave;
+		bgsOnSave = this._bgsOnSave;
+		this._bgmOnSave = this._bgsOnSave = {};
+		_Game_System_onAfterLoad.apply(this, arguments);
+		this._bgmOnSave = bgmOnSave;
+		this._bgsOnSave = bgsOnSave;
+	};
+
 	var _Game_Map_update = Game_Map.prototype.update;
 	Game_Map.prototype.update = function(sceneActive) {
 		_Game_Map_update.apply(this, arguments);
@@ -295,7 +324,7 @@
 		var dy = $gameMap.deltaY(source._realY, listenerY);
 		var d = Math.sqrt(dx * dx + dy * dy);
 		if (d > 1) audio.volume *= Math.pow(decay / 100, d - 1);
-		audio.pan = (dx * pan).clamp(-100, 100) || Number.MIN_VALUE;
+		audio.pan = (dx * pan).clamp(-100, 100);
 	}
 
 	//連携用の口
